@@ -1,0 +1,4 @@
+all: FORCE
+	coddle
+
+FORCE:
