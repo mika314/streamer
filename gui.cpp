@@ -1,14 +1,18 @@
 #include "gui.hpp"
 #include "imgui-impl-opengl3.h"
 #include "imgui-impl-sdl2.h"
-#include <cstring>
-#include <imgui/imgui.h>
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-#include <SDL_opengles2.h>
-#else
-#include <SDL_opengl.h>
-#endif
+#include "pref.hpp"
+#include "rgb2yuv.hpp"
+#include <GL/gl.h>
 #include <SDL.h>
+#include <chrono>
+#include <cstring>
+#include <functional>
+#include <imgui/imgui.h>
+#include <iostream>
+#include <libavutil/frame.h>
+#include <log/log.hpp>
+#include <string>
 
 bool InputText(const char *label, std::string &str, size_t buf_size = 256, unsigned flags = 0)
 {
@@ -22,7 +26,7 @@ bool InputText(const char *label, std::string &str, size_t buf_size = 256, unsig
   return false;
 }
 
-void RunGUI(GuiState &state, std::function<void()> mainLoopCallback)
+void GuiState::RunGUI()
 {
   // SDL/GL init...
   SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER);
@@ -61,32 +65,28 @@ void RunGUI(GuiState &state, std::function<void()> mainLoopCallback)
         done = true;
     }
 
-    // Main loop callback (for capturing frames, etc.)
-    if (mainLoopCallback)
-      mainLoopCallback();
-
-    SDL_GL_MakeCurrent(window, gl_context);
-
-    // Start ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
     ImGui::Begin("Stream Controls");
-    InputText("RTMP URL", state.rtmpUrl);
-    InputText("Stream Key", state.streamKey, 256, ImGuiInputTextFlags_Password);
-    if (!state.streaming)
+    InputText("RTMP URL", rtmpUrl);
+    InputText("Stream Key", streamKey, 256, ImGuiInputTextFlags_Password);
+    if (!streamer)
     {
       if (ImGui::Button("Start Streaming"))
       {
-        state.startRequested = true;
+        streamer = std::make_unique<Streamer>();
+        streamer->startStreaming(rtmpUrl, streamKey);
+        SavePreferences(*this);
       }
     }
     else
     {
       if (ImGui::Button("Stop Streaming"))
       {
-        state.stopRequested = true;
+        streamer->stopStreaming();
+        streamer = nullptr;
       }
     }
     ImGui::End();
