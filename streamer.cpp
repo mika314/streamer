@@ -105,7 +105,6 @@ bool Streamer::initVideoStream(int width, int height)
   videoSt = avformat_new_stream(fmtCtx, codec);
   if (!videoSt)
     return false;
-  videoSt->time_base = {1, 60};
   videoEncCtx = avcodec_alloc_context3(codec);
   if (!videoEncCtx)
   {
@@ -121,11 +120,11 @@ bool Streamer::initVideoStream(int width, int height)
   videoEncCtx->max_b_frames = 0;
   videoEncCtx->pix_fmt = AV_PIX_FMT_YUV420P;
 
-  videoEncCtx->flags |= AV_CODEC_FLAG_LOW_DELAY;
+  videoEncCtx->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG_GLOBAL_HEADER;
   videoEncCtx->thread_count = 0;
 
   av_opt_set(videoEncCtx->priv_data, "preset", "ultrafast", 0);
-  av_opt_set(videoEncCtx->priv_data, "profile", "main", 0);
+  av_opt_set(videoEncCtx->priv_data, "profile", "baseline", 0);
   av_opt_set(videoEncCtx->priv_data, "tune", "zerolatency", 0);
   av_opt_set(videoEncCtx->priv_data, "crf", "27", 0);
   if (avcodec_open2(videoEncCtx, codec, nullptr) < 0)
@@ -143,7 +142,6 @@ bool Streamer::initAudioStream()
     return false;
   }
   audioSt = avformat_new_stream(fmtCtx, codec);
-  audioSt->time_base = {1, SampleRate};
   audioEncCtx = avcodec_alloc_context3(codec);
   audioEncCtx->sample_rate = SampleRate;
   audioEncCtx->channel_layout = ChannelsNum == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
@@ -151,6 +149,7 @@ bool Streamer::initAudioStream()
   audioEncCtx->sample_fmt = codec->sample_fmts[0]; // pick first supported
   audioEncCtx->bit_rate = 128000;
   audioEncCtx->time_base = {1, audioEncCtx->sample_rate};
+  audioEncCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
   if (avcodec_open2(audioEncCtx, codec, nullptr) < 0)
     return false;
   avcodec_parameters_from_context(audioSt->codecpar, audioEncCtx);
@@ -205,8 +204,18 @@ int Streamer::encodeAndWrite(AVCodecContext *encCtx, AVFrame *frame, AVStream *s
       return ret;
     }
     pkt->stream_index = st->index;
+    // LOG("1 stream_index:",
+    //     pkt->stream_index,
+    //     "write frame pts:",
+    //     pkt->pts,
+    //     "enc time_base",
+    //     encCtx->time_base.num,
+    //     encCtx->time_base.den,
+    //     "stream time_base",
+    //     st->time_base.num,
+    //     st->time_base.den);
     av_packet_rescale_ts(pkt, encCtx->time_base, st->time_base);
-    // LOG("write frame pts:", pkt->pts, "stream_index:", pkt->stream_index);
+    // LOG("2 stream_index:", pkt->stream_index, "write frame pts:", pkt->pts);
     ret = av_interleaved_write_frame(fmtCtx, pkt);
     if (ret < 0)
     {
