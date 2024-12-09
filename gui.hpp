@@ -8,7 +8,10 @@ class Gui
 public:
   std::string rtmpUrl = "rtmp://lax.contribute.live-video.net/app";
   std::string streamKey;
-  SER_PROPS(rtmpUrl, streamKey);
+  std::string twitchUser = "mika314";
+  std::string twitchKey;
+  std::string twitchChannel = "mika314";
+  SER_PROPS(rtmpUrl, streamKey, twitchUser, twitchKey, twitchChannel);
 
   auto run() -> void;
 
