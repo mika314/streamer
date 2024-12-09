@@ -13,13 +13,15 @@ public:
   std::string twitchChannel = "mika314";
   bool muteDesktopAudio = false;
   float desktopAudioVolume = 1.f;
+  bool hideDesktop = false;
   SER_PROPS(rtmpUrl,
             streamKey,
             twitchUser,
             twitchKey,
             twitchChannel,
             muteDesktopAudio,
-            desktopAudioVolume);
+            desktopAudioVolume,
+            hideDesktop);
 
   auto run() -> void;
 

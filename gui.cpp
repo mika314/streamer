@@ -87,6 +87,8 @@ auto Gui::run() -> void
         streamer->setMuteDesktopAudio(muteDesktopAudio);
       if (ImGui::SliderFloat("Desktop Audio Volume", &desktopAudioVolume, 0.0f, 1.0f) && streamer)
         streamer->setDesktopAudioVolume(desktopAudioVolume);
+      if (ImGui::Checkbox("Hide Desktop", &hideDesktop) && streamer)
+        streamer->setHideDesktop(hideDesktop);
 
       if (!streamer)
       {
@@ -97,6 +99,7 @@ auto Gui::run() -> void
           streamer->startStreaming(rtmpUrl, streamKey);
           streamer->setMuteDesktopAudio(muteDesktopAudio);
           streamer->setDesktopAudioVolume(desktopAudioVolume);
+          streamer->setHideDesktop(hideDesktop);
 
           twitch = std::make_unique<Twitch>(uv, twitchUser, twitchKey, twitchChannel);
           twitchNotify = std::make_unique<TwitchNotify>(audio);

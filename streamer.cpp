@@ -424,55 +424,69 @@ auto Streamer::initVideoFrame() -> void
 // Capture a frame from the desktop using glReadPixels
 auto Streamer::captureFrame(uint8_t *rgbData) -> bool
 {
-  glReadBuffer(GL_FRONT);
-  glReadPixels(x, displayHeight - height + y, width, height, GL_RGB, GL_UNSIGNED_BYTE, rgbData);
-
-  const auto cursorImage = XFixesGetCursorImage(captureDisplay);
-  if (cursorImage)
+  if (!hideDesktop)
   {
-    const auto cursorX = cursorImage->x - cursorImage->xhot - x;
-    const auto cursorY = cursorImage->y - cursorImage->yhot - y;
-
-    for (auto j = 0; j < cursorImage->height; ++j)
+    glReadBuffer(GL_FRONT);
+    glReadPixels(x, displayHeight - height + y, width, height, GL_RGB, GL_UNSIGNED_BYTE, rgbData);
+    const auto cursorImage = XFixesGetCursorImage(captureDisplay);
+    if (cursorImage)
     {
-      const int imgY = cursorY + j;
-      if (imgY < 0 || imgY >= height)
-        continue;
+      const auto cursorX = cursorImage->x - cursorImage->xhot - x;
+      const auto cursorY = cursorImage->y - cursorImage->yhot - y;
 
-      for (auto i = 0; i < cursorImage->width; ++i)
+      for (auto j = 0; j < cursorImage->height; ++j)
       {
-        const auto imgX = cursorX + i;
-        if (imgX < 0 || imgX >= width)
+        const int imgY = cursorY + j;
+        if (imgY < 0 || imgY >= height)
           continue;
 
-        const auto cursorPixel = cursorImage->pixels[j * cursorImage->width + i];
-        const auto alpha = (cursorPixel >> 24) & 0xff;
-        if (alpha == 0)
-          continue;
+        for (auto i = 0; i < cursorImage->width; ++i)
+        {
+          const auto imgX = cursorX + i;
+          if (imgX < 0 || imgX >= width)
+            continue;
 
-        const auto cr = static_cast<uint8_t>((cursorPixel >> 16) & 0xff);
-        const auto cg = static_cast<uint8_t>((cursorPixel >> 8) & 0xff);
-        const auto cb = static_cast<uint8_t>(cursorPixel & 0xff);
+          const auto cursorPixel = cursorImage->pixels[j * cursorImage->width + i];
+          const auto alpha = (cursorPixel >> 24) & 0xff;
+          if (alpha == 0)
+            continue;
 
-        // rgbData is (width*height*3)
-        const auto imageIndex = ((height - imgY) * width + imgX) * 3;
-        if (imageIndex < 0 || imageIndex >= width * height * 3)
-          continue;
+          const auto cr = static_cast<uint8_t>((cursorPixel >> 16) & 0xff);
+          const auto cg = static_cast<uint8_t>((cursorPixel >> 8) & 0xff);
+          const auto cb = static_cast<uint8_t>(cursorPixel & 0xff);
 
-        const auto ir = rgbData[imageIndex];
-        const auto ig = rgbData[imageIndex + 1];
-        const auto ib = rgbData[imageIndex + 2];
+          // rgbData is (width*height*3)
+          const auto imageIndex = ((height - imgY) * width + imgX) * 3;
+          if (imageIndex < 0 || imageIndex >= width * height * 3)
+            continue;
 
-        const auto nr = static_cast<uint8_t>((cr * alpha + ir * (255 - alpha)) / 255);
-        const auto ng = static_cast<uint8_t>((cg * alpha + ig * (255 - alpha)) / 255);
-        const auto nb = static_cast<uint8_t>((cb * alpha + ib * (255 - alpha)) / 255);
+          const auto ir = rgbData[imageIndex];
+          const auto ig = rgbData[imageIndex + 1];
+          const auto ib = rgbData[imageIndex + 2];
 
-        rgbData[imageIndex] = nr;
-        rgbData[imageIndex + 1] = ng;
-        rgbData[imageIndex + 2] = nb;
+          const auto nr = static_cast<uint8_t>((cr * alpha + ir * (255 - alpha)) / 255);
+          const auto ng = static_cast<uint8_t>((cg * alpha + ig * (255 - alpha)) / 255);
+          const auto nb = static_cast<uint8_t>((cb * alpha + ib * (255 - alpha)) / 255);
+
+          rgbData[imageIndex] = nr;
+          rgbData[imageIndex + 1] = ng;
+          rgbData[imageIndex + 2] = nb;
+        }
       }
+      XFree(cursorImage);
     }
-    XFree(cursorImage);
+  }
+  else
+  {
+    static int t = 0;
+    ++t;
+    for (auto y = 0; y < height; ++y)
+      for (auto x = 0; x < width; ++x)
+      {
+        rgbData[(x + y * width) * 3 + 0] = (t + x + y) % 127;
+        rgbData[(x + y * width) * 3 + 1] = (5 * t + x + 2 * y) % 127;
+        rgbData[(x + y * width) * 3 + 2] = (7 * t + x + 3 * y) % 127;
+      }
   }
 
   return true;
@@ -634,4 +648,9 @@ auto Streamer::setMuteDesktopAudio(bool v) -> void
 auto Streamer::setDesktopAudioVolume(float v) -> void
 {
   desktopAudioVolume = v;
+}
+
+auto Streamer::setHideDesktop(bool v) -> void
+{
+  hideDesktop = v;
 }

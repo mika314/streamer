@@ -32,6 +32,7 @@ public:
   auto stopStreaming() -> void;
   auto setMuteDesktopAudio(bool) -> void;
   auto setDesktopAudioVolume(float) -> void;
+  auto setHideDesktop(bool) -> void;
 
 private:
   AVFormatContext *fmtCtx = nullptr;
@@ -60,6 +61,7 @@ private:
   std::mutex mutex;
   bool muteDesktopAudio = false;
   float desktopAudioVolume = 1.f;
+  bool hideDesktop = false;
 
   auto captureAudio(int16_t *samples, int nbSamples) -> bool;
   auto captureFrame(uint8_t *rgbData) -> bool;
