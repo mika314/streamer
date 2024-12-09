@@ -41,8 +41,8 @@ auto Gui::run() -> void
   auto window = sdl::Window{"Streamer",
                             SDL_WINDOWPOS_CENTERED,
                             SDL_WINDOWPOS_CENTERED,
-                            800,
-                            600,
+                            550,
+                            300,
                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE};
   auto glCtx = SDL_GL_CreateContext(window.get());
   SDL_GL_MakeCurrent(window.get(), glCtx);

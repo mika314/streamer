@@ -64,7 +64,7 @@ private:
   bool hideDesktop = false;
 
   auto captureAudio(int16_t *samples, int nbSamples) -> bool;
-  auto captureFrame(uint8_t *rgbData) -> bool;
+  auto captureFrame(uint8_t *rgbData) -> void;
   auto cleanupCapture() -> void;
   auto encodeAndWrite(AVCodecContext *, AVFrame *, AVStream *) -> int;
   auto initAudioCapture() -> bool;
@@ -73,7 +73,6 @@ private:
   auto initVideoFrame() -> void;
   auto initVideoStream() -> bool;
   auto sendAudioFrame(const uint8_t *pcmData, int nbSamples) -> int;
-  auto sendVideoFrame(AVFrame *frame) -> int;
   auto streamingAudioWorker() -> void;
   auto streamingVideoWorker() -> void;
 };

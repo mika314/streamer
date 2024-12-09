@@ -52,7 +52,7 @@ auto Streamer::initVideoStream() -> bool
   av_opt_set(videoEncCtx->priv_data, "preset", "ultrafast", 0);
   av_opt_set(videoEncCtx->priv_data, "profile", "baseline", 0);
   av_opt_set(videoEncCtx->priv_data, "tune", "zerolatency", 0);
-  av_opt_set(videoEncCtx->priv_data, "crf", "27", 0);
+  av_opt_set(videoEncCtx->priv_data, "crf", "30", 0);
   if (avcodec_open2(videoEncCtx, codec, nullptr) < 0)
   {
     LOG("Failed to create video encoder");
@@ -162,11 +162,6 @@ int Streamer::encodeAndWrite(AVCodecContext *encCtx, AVFrame *frame, AVStream *s
   }
   av_packet_free(&pkt);
   return ret;
-}
-
-int Streamer::sendVideoFrame(AVFrame *frame)
-{
-  return encodeAndWrite(videoEncCtx, frame, videoSt);
 }
 
 // For audio, you need to convert your captured PCM (interleaved int16_t) to AVFrame samples.
@@ -376,22 +371,35 @@ auto Streamer::streamingVideoWorker() -> void
   }
 
   auto target = std::chrono::steady_clock::now() + std::chrono::microseconds(1'000'000 / 60);
-  // Loop until stop requested
+  auto tryingCatchUp = false;
+  using namespace std::chrono_literals;
   while (!streamingShouldStop.load())
   {
-    if (captureFrame(rgbData))
+    if (!tryingCatchUp)
     {
+      captureFrame(rgbData);
       // Convert and send video
       uint8_t *dst[3] = {videoFrame->data[0], videoFrame->data[1], videoFrame->data[2]};
       int dstStride[3] = {videoFrame->linesize[0], videoFrame->linesize[1], videoFrame->linesize[2]};
       rgb2yuv.convert(rgbData, width * 3, dst, dstStride);
-      videoFrame->pts = videoPts++;
-      sendVideoFrame(videoFrame);
     }
+
+    videoFrame->pts = videoPts++;
+    encodeAndWrite(videoEncCtx, videoFrame, videoSt);
 
     const auto t = std::chrono::steady_clock::now();
     if (t < target)
+    {
       std::this_thread::sleep_for(target - t);
+      tryingCatchUp = false;
+    }
+    else if (t - target > 1s)
+    {
+      tryingCatchUp = true;
+      LOG("trying to catch up",
+          std::chrono::duration_cast<std::chrono::milliseconds>(t - target).count());
+    }
+
     target += std::chrono::microseconds(1'000'000 / 60);
   }
   av_frame_free(&videoFrame);
@@ -422,7 +430,7 @@ auto Streamer::initVideoFrame() -> void
 }
 
 // Capture a frame from the desktop using glReadPixels
-auto Streamer::captureFrame(uint8_t *rgbData) -> bool
+auto Streamer::captureFrame(uint8_t *rgbData) -> void
 {
   if (!hideDesktop)
   {
@@ -488,8 +496,6 @@ auto Streamer::captureFrame(uint8_t *rgbData) -> bool
         rgbData[(x + y * width) * 3 + 2] = (7 * t + x + 3 * y) % 127;
       }
   }
-
-  return true;
 }
 
 // Initialize X11, GLX, and set up OpenGL context for capturing
