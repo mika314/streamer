@@ -86,7 +86,6 @@ auto Rgb2Yuv::worker(int threadId) -> void
 
       for (auto x = 0; x < width; x += 16) // Process 16 pixels at a time
       {
-
         // Load 48 bytes (16 RGB pixels)
         const auto rgb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(&srcLine[x * 3]));
         const auto rgb1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(&srcLine[x * 3 + 16]));

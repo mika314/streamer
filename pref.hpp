@@ -1,5 +1,5 @@
 #pragma once
 #include "gui.hpp"
 
-void LoadPreferences(GuiState &state);
-void SavePreferences(const GuiState &state);
+auto loadPref(Gui &) -> void;
+auto savePref(const Gui &) -> void;

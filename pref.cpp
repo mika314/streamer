@@ -2,20 +2,18 @@
 #include <fstream>
 #include <json-ser/json-ser.hpp>
 
-static const char *PREF_FILE = "preferences.json";
+static const char *PrefFile = "preferences.json";
 
-void LoadPreferences(GuiState &state)
+auto loadPref(Gui &state) -> void
 {
-  std::ifstream ifs(PREF_FILE);
+  auto ifs = std::ifstream{PrefFile};
   if (!ifs)
-  {
     return;
-  }
   jsonDeser(ifs, state);
 }
 
-void SavePreferences(const GuiState &state)
+auto savePref(const Gui &state) -> void
 {
-  std::ofstream ofs(PREF_FILE);
+  auto ofs = std::ofstream{PrefFile};
   jsonSer(ofs, state);
 }

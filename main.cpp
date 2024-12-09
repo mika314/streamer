@@ -3,7 +3,5 @@
 
 int main(int /*argc*/, char ** /*argv*/)
 {
-  GuiState guiState;
-  LoadPreferences(guiState);
-  guiState.RunGUI();
+  Gui{}.run();
 }

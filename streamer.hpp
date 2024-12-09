@@ -25,11 +25,13 @@ class Streamer
 public:
   Streamer();
   ~Streamer();
+  Streamer(Streamer &) = delete;
+  auto operator=(Streamer) = delete;
+
   auto startStreaming(std::string url, std::string key) -> void;
   auto stopStreaming() -> void;
 
 private:
-  bool running = false;
   AVFormatContext *fmtCtx = nullptr;
   AVCodecContext *videoEncCtx = nullptr;
   AVCodecContext *audioEncCtx = nullptr;
@@ -54,19 +56,17 @@ private:
   pa_simple *paStream = nullptr;
   std::mutex mutex;
 
-  bool initVideoStream(int width, int height);
-  bool initAudioStream();
-  int encodeAndWrite(AVCodecContext *encCtx, AVFrame *frame, AVStream *st);
-  int sendVideoFrame(AVFrame *frame);
-  int sendAudioFrame(const uint8_t *pcmData, int nbSamples);
-  bool start(const std::string &url, int width, int height);
-  void stop();
-  void streamingVideoWorker();
-  void streamingAudioWorker();
-  bool initVideoCapture();
-  bool initAudioCapture();
-  void cleanupCapture();
-  bool captureAudio(int16_t *samples, int nbSamples);
-  bool captureFrame(uint8_t *rgbData);
-  void initVideoFrame();
+  auto captureAudio(int16_t *samples, int nbSamples) -> bool;
+  auto captureFrame(uint8_t *rgbData) -> bool;
+  auto cleanupCapture() -> void;
+  auto encodeAndWrite(AVCodecContext *, AVFrame *, AVStream *) -> int;
+  auto initAudioCapture() -> bool;
+  auto initAudioStream() -> bool;
+  auto initVideoCapture() -> bool;
+  auto initVideoFrame() -> void;
+  auto initVideoStream() -> bool;
+  auto sendAudioFrame(const uint8_t *pcmData, int nbSamples) -> int;
+  auto sendVideoFrame(AVFrame *frame) -> int;
+  auto streamingAudioWorker() -> void;
+  auto streamingVideoWorker() -> void;
 };
