@@ -73,7 +73,7 @@ You will need:
 
 ## Running
 
-1. Make sure you have a Twitch OAuth key for your Twitch user (https://dev.twitch.tv/docs/irc/auth).
+1. Make sure you have a Twitch OAuth key for your Twitch user (e.g. `oauth:xxxxxxxxxxxxxx`).
    
 2. Run the `streamer` binary:
    ```sh
