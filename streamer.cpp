@@ -456,6 +456,8 @@ auto Streamer::captureFrame(uint8_t *rgbData) -> bool
 
         // rgbData is (width*height*3)
         const auto imageIndex = ((height - imgY) * width + imgX) * 3;
+        if (imageIndex < 0 || imageIndex >= width * height * 3)
+          continue;
 
         const auto ir = rgbData[imageIndex];
         const auto ig = rgbData[imageIndex + 1];
