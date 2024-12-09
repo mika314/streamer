@@ -53,7 +53,8 @@ private:
   int displayHeight;
   int x = 0;
   int y = 0;
-  pa_simple *paStream = nullptr;
+  pa_simple *paStreamMic = nullptr;
+  pa_simple *paStreamDesktop = nullptr;
   std::mutex mutex;
 
   auto captureAudio(int16_t *samples, int nbSamples) -> bool;

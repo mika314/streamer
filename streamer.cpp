@@ -521,20 +521,36 @@ auto Streamer::initAudioCapture() -> bool
                                          .tlength = (uint32_t)-1,   // Not used for recording
                                          .prebuf = (uint32_t)-1,    // Not used for recording
                                          .minreq = (uint32_t)-1,    // Default minimum request size
-                                         .fragsize = AudioBufSz};
+                                         .fragsize = AudioBufSz * 4};
 
   auto error = 0;
-  paStream = pa_simple_new(nullptr,          // Default server
-                           "Streamer",       // Application name
-                           PA_STREAM_RECORD, // Record stream
-                           nullptr,          // Default device (microphone)
-                           "record",         // Stream description
-                           &ss,              // Sample format spec
-                           nullptr,          // Default channel map
-                           &bufferAttr,      // Buffer attributes
-                           &error);
+  paStreamMic = pa_simple_new(nullptr,          // Default server
+                              "Streamer",       // Application name
+                              PA_STREAM_RECORD, // Record stream
+                              nullptr,          // Default device (microphone)
+                              "record",         // Stream description
+                              &ss,              // Sample format spec
+                              nullptr,          // Default channel map
+                              &bufferAttr,      // Buffer attributes
+                              &error);
 
-  if (!paStream)
+  if (!paStreamMic)
+  {
+    LOG("pa_simple_new() failed:", pa_strerror(error));
+    return false;
+  }
+
+  paStreamDesktop = pa_simple_new(nullptr,          // Default server
+                                  "Streamer",       // Application name
+                                  PA_STREAM_RECORD, // Record stream
+                                  "@DEFAULT_SINK@.monitor",
+                                  "record",    // Stream description
+                                  &ss,         // Sample format spec
+                                  nullptr,     // Default channel map
+                                  &bufferAttr, // Buffer attributes
+                                  &error);
+
+  if (!paStreamDesktop)
   {
     LOG("pa_simple_new() failed:", pa_strerror(error));
     return false;
@@ -544,21 +560,32 @@ auto Streamer::initAudioCapture() -> bool
 }
 
 // Capture audio samples from the microphone
-// using pa_simple_read (adapted from original code).
 auto Streamer::captureAudio(int16_t *samples, int nbSamples) -> bool
 {
-  if (!paStream)
+  if (!paStreamMic)
+    return false;
+  if (!paStreamDesktop)
     return false;
 
   auto error = 0;
   const auto bytesToRead = nbSamples * ChN * sizeof(int16_t);
-  if (pa_simple_read(paStream, samples, bytesToRead, &error) < 0)
+  auto micAudio = std::array<int16_t, AudioBufSz * ChN>{};
+  if (pa_simple_read(paStreamMic, micAudio.data(), bytesToRead, &error) < 0)
   {
     LOG("pa_simple_read() failed:", pa_strerror(error));
-    // On error, zero out samples to avoid NaN.
-    memset(samples, 0, bytesToRead);
     return false;
   }
+
+  auto desktopAudio = std::array<int16_t, AudioBufSz * ChN>{};
+  if (pa_simple_read(paStreamDesktop, desktopAudio.data(), bytesToRead, &error) < 0)
+  {
+    LOG("pa_simple_read() failed:", pa_strerror(error));
+    return false;
+  }
+
+  for (auto i = 0; i < nbSamples * ChN; ++i)
+    samples[i] = micAudio[i] + desktopAudio[i];
+
   return true;
 }
 
@@ -579,9 +606,14 @@ auto Streamer::cleanupCapture() -> void
   }
 
   // Free PulseAudio stream
-  if (paStream)
+  if (paStreamMic)
   {
-    pa_simple_free(paStream);
-    paStream = nullptr;
+    pa_simple_free(paStreamMic);
+    paStreamMic = nullptr;
+  }
+  if (paStreamDesktop)
+  {
+    pa_simple_free(paStreamDesktop);
+    paStreamDesktop = nullptr;
   }
 }
