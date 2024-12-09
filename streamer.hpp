@@ -30,6 +30,8 @@ public:
 
   auto startStreaming(std::string url, std::string key) -> void;
   auto stopStreaming() -> void;
+  auto setMuteDesktopAudio(bool) -> void;
+  auto setDesktopAudioVolume(float) -> void;
 
 private:
   AVFormatContext *fmtCtx = nullptr;
@@ -56,6 +58,8 @@ private:
   pa_simple *paStreamMic = nullptr;
   pa_simple *paStreamDesktop = nullptr;
   std::mutex mutex;
+  bool muteDesktopAudio = false;
+  float desktopAudioVolume = 1.f;
 
   auto captureAudio(int16_t *samples, int nbSamples) -> bool;
   auto captureFrame(uint8_t *rgbData) -> bool;

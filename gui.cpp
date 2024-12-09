@@ -83,6 +83,11 @@ auto Gui::run() -> void
       inputText("User", twitchUser);
       inputText("Key", twitchKey, 256, ImGuiInputTextFlags_Password);
       inputText("Channel", twitchChannel);
+      if (ImGui::Checkbox("Mute Desktop Audio", &muteDesktopAudio) && streamer)
+        streamer->setMuteDesktopAudio(muteDesktopAudio);
+      if (ImGui::SliderFloat("Desktop Audio Volume", &desktopAudioVolume, 0.0f, 1.0f) && streamer)
+        streamer->setDesktopAudioVolume(desktopAudioVolume);
+
       if (!streamer)
       {
         if (ImGui::Button("Start Streaming"))
@@ -90,6 +95,8 @@ auto Gui::run() -> void
           savePref(*this);
           streamer = std::make_unique<Streamer>();
           streamer->startStreaming(rtmpUrl, streamKey);
+          streamer->setMuteDesktopAudio(muteDesktopAudio);
+          streamer->setDesktopAudioVolume(desktopAudioVolume);
 
           twitch = std::make_unique<Twitch>(uv, twitchUser, twitchKey, twitchChannel);
           twitchNotify = std::make_unique<TwitchNotify>(audio);

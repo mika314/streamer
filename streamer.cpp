@@ -561,6 +561,11 @@ auto Streamer::initAudioCapture() -> bool
   return true;
 }
 
+static auto calcLogVol(auto v)
+{
+  return exp(5 * (v - 1));
+}
+
 // Capture audio samples from the microphone
 auto Streamer::captureAudio(int16_t *samples, int nbSamples) -> bool
 {
@@ -585,8 +590,9 @@ auto Streamer::captureAudio(int16_t *samples, int nbSamples) -> bool
     return false;
   }
 
+  const auto k = muteDesktopAudio ? 0.f : calcLogVol(desktopAudioVolume);
   for (auto i = 0; i < nbSamples * ChN; ++i)
-    samples[i] = micAudio[i] + desktopAudio[i];
+    samples[i] = micAudio[i] + k * desktopAudio[i];
 
   return true;
 }
@@ -618,4 +624,14 @@ auto Streamer::cleanupCapture() -> void
     pa_simple_free(paStreamDesktop);
     paStreamDesktop = nullptr;
   }
+}
+
+auto Streamer::setMuteDesktopAudio(bool v) -> void
+{
+  muteDesktopAudio = v;
+}
+
+auto Streamer::setDesktopAudioVolume(float v) -> void
+{
+  desktopAudioVolume = v;
 }

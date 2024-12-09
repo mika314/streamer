@@ -11,7 +11,15 @@ public:
   std::string twitchUser = "mika314";
   std::string twitchKey;
   std::string twitchChannel = "mika314";
-  SER_PROPS(rtmpUrl, streamKey, twitchUser, twitchKey, twitchChannel);
+  bool muteDesktopAudio = false;
+  float desktopAudioVolume = 1.f;
+  SER_PROPS(rtmpUrl,
+            streamKey,
+            twitchUser,
+            twitchKey,
+            twitchChannel,
+            muteDesktopAudio,
+            desktopAudioVolume);
 
   auto run() -> void;
 
