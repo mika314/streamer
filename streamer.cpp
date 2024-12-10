@@ -6,8 +6,9 @@
 static const int ChN = 2;
 static const int SampleRate = 48'000;
 static const int AudioBufSz = 1024;
+static const int Fps = 60;
 
-Streamer::Streamer()
+Streamer::Streamer() : startTime(std::chrono::steady_clock::now())
 {
   avformat_network_init();
 }
@@ -40,9 +41,9 @@ auto Streamer::initVideoStream() -> bool
   videoEncCtx->bit_rate = 0;
   videoEncCtx->width = width;
   videoEncCtx->height = height;
-  videoEncCtx->time_base = {1, 60};
-  videoEncCtx->framerate = {60, 1};
-  videoEncCtx->gop_size = 120;
+  videoEncCtx->time_base = {1, Fps};
+  videoEncCtx->framerate = {Fps, 1};
+  videoEncCtx->gop_size = 2 * Fps;
   videoEncCtx->max_b_frames = 0;
   videoEncCtx->pix_fmt = AV_PIX_FMT_YUV420P;
 
@@ -110,6 +111,8 @@ auto Streamer::initAudioStream() -> bool
 int Streamer::encodeAndWrite(AVCodecContext *encCtx, AVFrame *frame, AVStream *st)
 {
   auto lock = std::unique_lock{mutex};
+
+  // LOG("0 send frame", st->index, "pts", frame->pts);
 
   if (const auto ret = avcodec_send_frame(encCtx, frame);
       ret < 0 && ret != AVERROR_EOF && ret != AVERROR(EAGAIN))
@@ -304,6 +307,7 @@ auto Streamer::startStreaming(std::string url, std::string key) -> void
 
   streamingRunning.store(true);
   streamingShouldStop.store(false);
+  videoReady.store(false);
 
   // Launch the streaming thread
   streamingVideoThread = std::thread{[this]() { streamingVideoWorker(); }};
@@ -370,9 +374,14 @@ auto Streamer::streamingVideoWorker() -> void
     return;
   }
 
-  auto target = std::chrono::steady_clock::now() + std::chrono::microseconds(1'000'000 / 60);
-  auto tryingCatchUp = false;
   using namespace std::chrono_literals;
+
+  videoReady.store(true);
+  const auto now = std::chrono::steady_clock::now();
+  videoPts = std::chrono::duration_cast<std::chrono::seconds>((now - startTime) * Fps).count();
+
+  auto target = now + std::chrono::microseconds(1'000'000 / Fps);
+  auto tryingCatchUp = false;
   while (!streamingShouldStop.load())
   {
     if (!tryingCatchUp)
@@ -400,7 +409,7 @@ auto Streamer::streamingVideoWorker() -> void
           std::chrono::duration_cast<std::chrono::milliseconds>(t - target).count());
     }
 
-    target += std::chrono::microseconds(1'000'000 / 60);
+    target += std::chrono::microseconds(1'000'000 / Fps);
   }
   av_frame_free(&videoFrame);
 }
@@ -408,11 +417,14 @@ auto Streamer::streamingVideoWorker() -> void
 auto Streamer::streamingAudioWorker() -> void
 {
   auto audioSamples = std::array<int16_t, AudioBufSz * ChN>{};
+  const auto now = std::chrono::steady_clock::now();
+  audioPts = std::chrono::duration_cast<std::chrono::seconds>((now - startTime) * SampleRate).count();
   while (!streamingShouldStop.load())
   {
     if (!captureAudio(audioSamples.data(), AudioBufSz))
       continue;
-    sendAudioFrame(reinterpret_cast<uint8_t *>(audioSamples.data()), AudioBufSz);
+    if (videoReady.load())
+      sendAudioFrame(reinterpret_cast<uint8_t *>(audioSamples.data()), AudioBufSz);
   }
 }
 
@@ -491,9 +503,9 @@ auto Streamer::captureFrame(uint8_t *rgbData) -> void
     for (auto y = 0; y < height; ++y)
       for (auto x = 0; x < width; ++x)
       {
-        rgbData[(x + y * width) * 3 + 0] = (t + x + y) % 127;
-        rgbData[(x + y * width) * 3 + 1] = (5 * t + x + 2 * y) % 127;
-        rgbData[(x + y * width) * 3 + 2] = (7 * t + x + 3 * y) % 127;
+        rgbData[(x + y * width) * 3 + 0] = (t / 5 + x + y) % 127;
+        rgbData[(x + y * width) * 3 + 1] = (t + x + 2 * y) % 127;
+        rgbData[(x + y * width) * 3 + 2] = (7 * t / 5 + x + 3 * y) % 127;
       }
   }
 }

@@ -62,6 +62,8 @@ private:
   bool muteDesktopAudio = false;
   float desktopAudioVolume = 1.f;
   bool hideDesktop = false;
+  decltype(std::chrono::steady_clock::now()) startTime;
+  std::atomic<bool> videoReady{false};
 
   auto captureAudio(int16_t *samples, int nbSamples) -> bool;
   auto captureFrame(uint8_t *rgbData) -> void;
