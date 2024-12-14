@@ -20,7 +20,8 @@ Streamer::~Streamer()
 
 auto Streamer::initVideoStream() -> bool
 {
-  auto codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+  // auto codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+  auto codec = avcodec_find_encoder_by_name("h264_nvenc");
   if (!codec)
   {
     LOG("H.264 encoder not found");
@@ -38,14 +39,14 @@ auto Streamer::initVideoStream() -> bool
     LOG("Could not allocate video coedec context");
     return false;
   }
-  videoEncCtx->bit_rate = 0;
+  videoEncCtx->bit_rate = 5'000'000;
   videoEncCtx->width = width;
   videoEncCtx->height = height;
   videoEncCtx->time_base = {1, Fps};
   videoEncCtx->framerate = {Fps, 1};
   videoEncCtx->gop_size = 2 * Fps;
   videoEncCtx->max_b_frames = 0;
-  videoEncCtx->pix_fmt = AV_PIX_FMT_YUV420P;
+  videoEncCtx->pix_fmt = AV_PIX_FMT_NV12;
 
   videoEncCtx->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG_GLOBAL_HEADER;
   videoEncCtx->thread_count = 0;
@@ -358,7 +359,7 @@ auto Streamer::streamingVideoWorker() -> void
 
   auto rgb2yuv = Rgb2Yuv{8 /* number of threads */, width, height};
   auto videoFrame = av_frame_alloc();
-  videoFrame->format = AV_PIX_FMT_YUV420P;
+  videoFrame->format = AV_PIX_FMT_NV12;
   videoFrame->width = width;
   videoFrame->height = height;
   if (av_frame_get_buffer(videoFrame, 32) < 0)
@@ -431,7 +432,7 @@ auto Streamer::streamingAudioWorker() -> void
 auto Streamer::initVideoFrame() -> void
 {
   videoFrame = av_frame_alloc();
-  videoFrame->format = AV_PIX_FMT_YUV420P;
+  videoFrame->format = AV_PIX_FMT_NV12;
   videoFrame->width = width;
   videoFrame->height = height;
   if (av_frame_get_buffer(videoFrame, 32) < 0)
