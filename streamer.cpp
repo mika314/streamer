@@ -7,6 +7,7 @@ static const int ChN = 2;
 static const int SampleRate = 48'000;
 static const int AudioBufSz = 1024;
 static const int Fps = 60;
+static const int MaxAvDesync = 200; // ms
 
 Streamer::Streamer() : startTime(std::chrono::steady_clock::now())
 {
@@ -218,8 +219,12 @@ int Streamer::sendAudioFrame(const uint8_t *pcmData, int nbSamples)
   }
 
   // Set pts (in samples)
+  if (audioPts < 0)
+    audioPts = std::chrono::duration_cast<std::chrono::seconds>(
+                 (std::chrono::steady_clock::now() - startTime) * SampleRate)
+                 .count();
   af->pts = audioPts;
-  audioPts += convertedSamples; // increment pts by the number of samples
+  audioPts += AudioBufSz;
 
   // Now encode and send
   int ret = encodeAndWrite(audioEncCtx, af, audioSt);
@@ -418,14 +423,38 @@ auto Streamer::streamingVideoWorker() -> void
 auto Streamer::streamingAudioWorker() -> void
 {
   auto audioSamples = std::array<int16_t, AudioBufSz * ChN>{};
-  const auto now = std::chrono::steady_clock::now();
-  audioPts = std::chrono::duration_cast<std::chrono::seconds>((now - startTime) * SampleRate).count();
+  audioPts = -1;
+  auto skipCnt = 0;
   while (!streamingShouldStop.load())
   {
     if (!captureAudio(audioSamples.data(), AudioBufSz))
       continue;
-    if (videoReady.load())
-      sendAudioFrame(reinterpret_cast<uint8_t *>(audioSamples.data()), AudioBufSz);
+    if (!videoReady.load())
+      continue;
+    if (skipCnt > 0)
+    {
+      LOG("skipping");
+      --skipCnt;
+      continue;
+    }
+    sendAudioFrame(reinterpret_cast<uint8_t *>(audioSamples.data()), AudioBufSz);
+    const auto expectedPts = std::chrono::duration_cast<std::chrono::seconds>(
+                               (std::chrono::steady_clock::now() - startTime) * SampleRate)
+                               .count();
+    if (std::abs(audioPts - expectedPts) > SampleRate * MaxAvDesync / 1000)
+    {
+      LOG("desync more than ", MaxAvDesync, "ms", (audioPts - expectedPts) * 1000 / SampleRate);
+      if (expectedPts > audioPts)
+      {
+        while (expectedPts > audioPts)
+        {
+          LOG("Sending extra");
+          sendAudioFrame(reinterpret_cast<uint8_t *>(audioSamples.data()), AudioBufSz);
+        }
+      }
+      else
+        skipCnt = (audioPts - expectedPts) / AudioBufSz;
+    }
   }
 }
 
@@ -556,7 +585,7 @@ auto Streamer::initAudioCapture() -> bool
                                          .tlength = (uint32_t)-1,   // Not used for recording
                                          .prebuf = (uint32_t)-1,    // Not used for recording
                                          .minreq = (uint32_t)-1,    // Default minimum request size
-                                         .fragsize = AudioBufSz * 4};
+                                         .fragsize = MaxAvDesync * SampleRate / 1000};
 
   auto error = 0;
   paStreamMic = pa_simple_new(nullptr,          // Default server
