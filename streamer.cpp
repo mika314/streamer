@@ -49,10 +49,10 @@ auto Streamer::initVideoStream() -> bool
   videoEncCtx->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG_GLOBAL_HEADER;
   videoEncCtx->thread_count = 0;
 
-  av_opt_set(videoEncCtx->priv_data, "preset", "ultrafast", 0);
-  av_opt_set(videoEncCtx->priv_data, "profile", "baseline", 0);
-  av_opt_set(videoEncCtx->priv_data, "tune", "zerolatency", 0);
-  av_opt_set(videoEncCtx->priv_data, "crf", "30", 0);
+  av_opt_set(videoEncCtx->priv_data, "rc", "cbr", 0);
+  av_opt_set(videoEncCtx->priv_data, "preset", "p1", 0);
+  av_opt_set(videoEncCtx->priv_data, "profile", "main", 0);
+  av_opt_set(videoEncCtx->priv_data, "delay", "0", 0);
   if (avcodec_open2(videoEncCtx, codec, nullptr) < 0)
   {
     LOG("Failed to create video encoder");
