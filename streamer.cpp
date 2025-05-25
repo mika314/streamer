@@ -1,13 +1,10 @@
 #include "streamer.hpp"
 #include "rgb2yuv.hpp"
+#include <algorithm>
 #include <array>
 #include <log/log.hpp>
 
-static const int ChN = 2;
-static const int SampleRate = 48'000;
-static const int AudioBufSz = 1024;
 static const int Fps = 60;
-static const int MaxAvDesync = 200; // ms
 
 Streamer::Streamer() : startTime(std::chrono::steady_clock::now())
 {
@@ -75,9 +72,9 @@ auto Streamer::initAudioStream() -> bool
   }
   audioSt = avformat_new_stream(fmtCtx, codec);
   audioEncCtx = avcodec_alloc_context3(codec);
-  audioEncCtx->sample_rate = SampleRate;
-  audioEncCtx->channel_layout = ChN == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
-  audioEncCtx->channels = ChN;
+  audioEncCtx->sample_rate = Audio::SampleRate;
+  audioEncCtx->channel_layout = Audio::ChN == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
+  audioEncCtx->channels = Audio::ChN;
   audioEncCtx->sample_fmt = codec->sample_fmts[0]; // pick first supported
   audioEncCtx->bit_rate = 128000;
   audioEncCtx->time_base = {1, audioEncCtx->sample_rate};
@@ -221,10 +218,10 @@ int Streamer::sendAudioFrame(const uint8_t *pcmData, int nbSamples)
   // Set pts (in samples)
   if (audioPts < 0)
     audioPts = std::chrono::duration_cast<std::chrono::seconds>(
-                 (std::chrono::steady_clock::now() - startTime) * SampleRate)
+                 (std::chrono::steady_clock::now() - startTime) * Audio::SampleRate)
                  .count();
   af->pts = audioPts;
-  audioPts += AudioBufSz;
+  audioPts += Audio::BufSz;
 
   // Now encode and send
   int ret = encodeAndWrite(audioEncCtx, af, audioSt);
@@ -244,12 +241,6 @@ auto Streamer::startStreaming(std::string url, std::string key) -> void
   if (!initVideoCapture())
   {
     LOG("Failed to init video capture");
-    return;
-  }
-
-  if (!initAudioCapture())
-  {
-    LOG("Failed to init audio capture");
     return;
   }
 
@@ -422,40 +413,42 @@ auto Streamer::streamingVideoWorker() -> void
 
 auto Streamer::streamingAudioWorker() -> void
 {
-  auto audioSamples = std::array<int16_t, AudioBufSz * ChN>{};
   audioPts = -1;
   auto skipCnt = 0;
-  while (!streamingShouldStop.load())
-  {
-    if (!captureAudio(audioSamples.data(), AudioBufSz))
-      continue;
+
+  audio.run([&](const std::array<int16_t, Audio::BufSz * Audio::ChN> &buf) {
+    if (streamingShouldStop.load())
+      audio.stop();
     if (!videoReady.load())
-      continue;
+      return;
     if (skipCnt > 0)
     {
       LOG("skipping");
       --skipCnt;
-      continue;
+      return;
     }
-    sendAudioFrame(reinterpret_cast<uint8_t *>(audioSamples.data()), AudioBufSz);
+    sendAudioFrame(reinterpret_cast<const uint8_t *>(buf.data()), Audio::BufSz);
     const auto expectedPts = std::chrono::duration_cast<std::chrono::seconds>(
-                               (std::chrono::steady_clock::now() - startTime) * SampleRate)
+                               (std::chrono::steady_clock::now() - startTime) * Audio::SampleRate)
                                .count();
-    if (std::abs(audioPts - expectedPts) > SampleRate * MaxAvDesync / 1000)
+    if (std::abs(audioPts - expectedPts) > Audio::SampleRate * Audio::MaxAvDesync / 1000)
     {
-      LOG("desync more than ", MaxAvDesync, "ms", (audioPts - expectedPts) * 1000 / SampleRate);
+      LOG("desync more than ",
+          Audio::MaxAvDesync,
+          "ms",
+          (audioPts - expectedPts) * 1000 / Audio::SampleRate);
       if (expectedPts > audioPts)
       {
         while (expectedPts > audioPts)
         {
           LOG("Sending extra");
-          sendAudioFrame(reinterpret_cast<uint8_t *>(audioSamples.data()), AudioBufSz);
+          sendAudioFrame(reinterpret_cast<const uint8_t *>(buf.data()), Audio::BufSz);
         }
       }
       else
-        skipCnt = (audioPts - expectedPts) / AudioBufSz;
+        skipCnt = (audioPts - expectedPts) / Audio::BufSz;
     }
-  }
+  });
 }
 
 auto Streamer::initVideoFrame() -> void
@@ -576,89 +569,6 @@ auto Streamer::initVideoCapture() -> bool
   return true;
 }
 
-// Initialize PulseAudio for capturing microphone audio
-// Code adapted from original web-socket-session.cpp::initAudio()
-auto Streamer::initAudioCapture() -> bool
-{
-  const auto ss = pa_sample_spec{.format = PA_SAMPLE_S16LE, .rate = SampleRate, .channels = ChN};
-  const auto bufferAttr = pa_buffer_attr{.maxlength = (uint32_t)-1, // Default maximum buffer size
-                                         .tlength = (uint32_t)-1,   // Not used for recording
-                                         .prebuf = (uint32_t)-1,    // Not used for recording
-                                         .minreq = (uint32_t)-1,    // Default minimum request size
-                                         .fragsize = MaxAvDesync * SampleRate / 1000};
-
-  auto error = 0;
-  paStreamMic = pa_simple_new(nullptr,          // Default server
-                              "Streamer",       // Application name
-                              PA_STREAM_RECORD, // Record stream
-                              nullptr,          // Default device (microphone)
-                              "record",         // Stream description
-                              &ss,              // Sample format spec
-                              nullptr,          // Default channel map
-                              &bufferAttr,      // Buffer attributes
-                              &error);
-
-  if (!paStreamMic)
-  {
-    LOG("pa_simple_new() failed:", pa_strerror(error));
-    return false;
-  }
-
-  paStreamDesktop = pa_simple_new(nullptr,          // Default server
-                                  "Streamer",       // Application name
-                                  PA_STREAM_RECORD, // Record stream
-                                  "@DEFAULT_SINK@.monitor",
-                                  "record",    // Stream description
-                                  &ss,         // Sample format spec
-                                  nullptr,     // Default channel map
-                                  &bufferAttr, // Buffer attributes
-                                  &error);
-
-  if (!paStreamDesktop)
-  {
-    LOG("pa_simple_new() failed:", pa_strerror(error));
-    return false;
-  }
-
-  return true;
-}
-
-static auto calcLogVol(auto v)
-{
-  return exp(5 * (v - 1));
-}
-
-// Capture audio samples from the microphone
-auto Streamer::captureAudio(int16_t *samples, int nbSamples) -> bool
-{
-  if (!paStreamMic)
-    return false;
-  if (!paStreamDesktop)
-    return false;
-
-  auto error = 0;
-  const auto bytesToRead = nbSamples * ChN * sizeof(int16_t);
-  auto micAudio = std::array<int16_t, AudioBufSz * ChN>{};
-  if (pa_simple_read(paStreamMic, micAudio.data(), bytesToRead, &error) < 0)
-  {
-    LOG("pa_simple_read() failed:", pa_strerror(error));
-    return false;
-  }
-
-  auto desktopAudio = std::array<int16_t, AudioBufSz * ChN>{};
-  if (pa_simple_read(paStreamDesktop, desktopAudio.data(), bytesToRead, &error) < 0)
-  {
-    LOG("pa_simple_read() failed:", pa_strerror(error));
-    return false;
-  }
-
-  const auto k = muteDesktopAudio ? 0.f : calcLogVol(desktopAudioVolume);
-  for (auto i = 0; i < nbSamples * ChN; ++i)
-    samples[i] = micAudio[i] + k * desktopAudio[i];
-
-  return true;
-}
-
 auto Streamer::cleanupCapture() -> void
 {
   // Destroy the GLX context
@@ -674,31 +584,44 @@ auto Streamer::cleanupCapture() -> void
     XCloseDisplay(captureDisplay);
     captureDisplay = nullptr;
   }
-
-  // Free PulseAudio stream
-  if (paStreamMic)
-  {
-    pa_simple_free(paStreamMic);
-    paStreamMic = nullptr;
-  }
-  if (paStreamDesktop)
-  {
-    pa_simple_free(paStreamDesktop);
-    paStreamDesktop = nullptr;
-  }
 }
 
 auto Streamer::setMuteDesktopAudio(bool v) -> void
 {
-  muteDesktopAudio = v;
+  audio.setMuteDesktopAudio(v);
 }
 
-auto Streamer::setDesktopAudioVolume(float v) -> void
+auto Streamer::setDesktopAudioVolume(double v) -> void
 {
-  desktopAudioVolume = v;
+  audio.setDesktopAudioVolume(v);
 }
 
 auto Streamer::setHideDesktop(bool v) -> void
 {
   hideDesktop = v;
+}
+
+auto Streamer::setMuteMic(bool v) -> void
+{
+  audio.setMuteMic(v);
+}
+
+auto Streamer::setBoostMic(bool v) -> void
+{
+  audio.setBoostMic(v);
+}
+
+auto Streamer::getDesktopAudioLevel() -> float
+{
+  return audio.getDesktopAudioLevel();
+}
+
+auto Streamer::getMicLevel() -> float
+{
+  return audio.getMicLevel();
+}
+
+auto Streamer::setNoiseLevel(double v) -> void
+{
+  audio.setNoiseLevel(v);
 }

@@ -14,6 +14,9 @@ public:
   bool muteDesktopAudio = false;
   float desktopAudioVolume = 1.f;
   bool hideDesktop = false;
+  bool muteMic = false;
+  bool boostMic = true;
+  float noiseLevel = 0.1f;
   SER_PROPS(rtmpUrl,
             streamKey,
             twitchUser,
@@ -21,7 +24,10 @@ public:
             twitchChannel,
             muteDesktopAudio,
             desktopAudioVolume,
-            hideDesktop);
+            hideDesktop,
+            muteMic,
+            boostMic,
+            noiseLevel);
 
   auto run() -> void;
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "audio.hpp"
 #include <GL/glx.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -11,8 +12,6 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
 #include <libswresample/swresample.h>
-#include <pulse/error.h>
-#include <pulse/simple.h>
 }
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <SDL_opengles2.h>
@@ -31,8 +30,13 @@ public:
   auto startStreaming(std::string url, std::string key) -> void;
   auto stopStreaming() -> void;
   auto setMuteDesktopAudio(bool) -> void;
-  auto setDesktopAudioVolume(float) -> void;
+  auto setDesktopAudioVolume(double) -> void;
   auto setHideDesktop(bool) -> void;
+  auto setMuteMic(bool) -> void;
+  auto setBoostMic(bool) -> void;
+  auto getDesktopAudioLevel() -> float;
+  auto getMicLevel() -> float;
+  auto setNoiseLevel(double) -> void;
 
 private:
   AVFormatContext *fmtCtx = nullptr;
@@ -56,11 +60,8 @@ private:
   int displayHeight;
   int x = 0;
   int y = 0;
-  pa_simple *paStreamMic = nullptr;
-  pa_simple *paStreamDesktop = nullptr;
+  Audio audio;
   std::mutex mutex;
-  bool muteDesktopAudio = false;
-  float desktopAudioVolume = 1.f;
   bool hideDesktop = false;
   decltype(std::chrono::steady_clock::now()) startTime;
   std::atomic<bool> videoReady{false};
@@ -69,7 +70,6 @@ private:
   auto captureFrame(uint8_t *rgbData) -> void;
   auto cleanupCapture() -> void;
   auto encodeAndWrite(AVCodecContext *, AVFrame *, AVStream *) -> int;
-  auto initAudioCapture() -> bool;
   auto initAudioStream() -> bool;
   auto initVideoCapture() -> bool;
   auto initVideoFrame() -> void;

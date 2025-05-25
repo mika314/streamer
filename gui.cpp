@@ -41,8 +41,8 @@ auto Gui::run() -> void
   auto window = sdl::Window{"Streamer",
                             SDL_WINDOWPOS_CENTERED,
                             SDL_WINDOWPOS_CENTERED,
-                            550,
-                            300,
+                            640,
+                            410,
                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE};
   auto glCtx = SDL_GL_CreateContext(window.get());
   SDL_GL_MakeCurrent(window.get(), glCtx);
@@ -83,12 +83,26 @@ auto Gui::run() -> void
       inputText("User", twitchUser);
       inputText("Key", twitchKey, 256, ImGuiInputTextFlags_Password);
       inputText("Channel", twitchChannel);
-      if (ImGui::Checkbox("Mute Desktop Audio", &muteDesktopAudio) && streamer)
-        streamer->setMuteDesktopAudio(muteDesktopAudio);
-      if (ImGui::SliderFloat("Desktop Audio Volume", &desktopAudioVolume, 0.0f, 1.0f) && streamer)
-        streamer->setDesktopAudioVolume(desktopAudioVolume);
-      if (ImGui::Checkbox("Hide Desktop", &hideDesktop) && streamer)
-        streamer->setHideDesktop(hideDesktop);
+      if (streamer)
+      {
+        if (ImGui::Checkbox("Mute Desktop Audio", &muteDesktopAudio))
+          streamer->setMuteDesktopAudio(muteDesktopAudio);
+        ImGui::ProgressBar(streamer->getDesktopAudioLevel(), ImVec2(0, 1), "");
+        if (ImGui::SliderFloat("Desktop Audio Volume", &desktopAudioVolume, 0.0f, 1.0f))
+          streamer->setDesktopAudioVolume(desktopAudioVolume);
+        if (ImGui::Checkbox("Hide Desktop", &hideDesktop))
+          streamer->setHideDesktop(hideDesktop);
+        if (ImGui::Checkbox("Mute Mic", &muteMic))
+          streamer->setMuteMic(muteMic);
+        ImGui::ProgressBar(streamer->getMicLevel(), ImVec2(0, 1), "");
+        if (ImGui::Checkbox("Boost Mic", &boostMic))
+          streamer->setBoostMic(boostMic);
+        if (ImGui::SliderFloat("Noise Level", &noiseLevel, 0.0f, 1.f))
+        {
+          noiseLevel = std::clamp(noiseLevel, .01f, .5f);
+          streamer->setNoiseLevel(noiseLevel);
+        }
+      }
 
       if (!streamer)
       {
@@ -100,6 +114,9 @@ auto Gui::run() -> void
           streamer->setMuteDesktopAudio(muteDesktopAudio);
           streamer->setDesktopAudioVolume(desktopAudioVolume);
           streamer->setHideDesktop(hideDesktop);
+          streamer->setMuteMic(muteMic);
+          streamer->setBoostMic(boostMic);
+          streamer->setNoiseLevel(noiseLevel);
 
           twitch = std::make_unique<Twitch>(uv, twitchUser, twitchKey, twitchChannel);
           twitchNotify = std::make_unique<TwitchNotify>(audio);
