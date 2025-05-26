@@ -73,7 +73,7 @@ auto Audio::micReadCb(size_t nbytes) -> void
                                      static_cast<const int16_t *>(data) + nbytes / sizeof(int16_t));
     if (k <= 0)
       return 1.;
-    return 1. + a * pow(k, b) * exp(-c * k);
+    return .5 * (1. + a * pow(k, b) * exp(-c * k));
   }();
 
   micLevel = 0.0;

@@ -439,11 +439,10 @@ auto Streamer::streamingAudioWorker() -> void
           (audioPts - expectedPts) * 1000 / Audio::SampleRate);
       if (expectedPts > audioPts)
       {
+        LOG("Sending extra", expectedPts - audioPts);
+        auto zeroBuf = std::array<int16_t, Audio::BufSz * Audio::ChN>{};
         while (expectedPts > audioPts)
-        {
-          LOG("Sending extra");
-          sendAudioFrame(reinterpret_cast<const uint8_t *>(buf.data()), Audio::BufSz);
-        }
+          sendAudioFrame(reinterpret_cast<const uint8_t *>(zeroBuf.data()), Audio::BufSz);
       }
       else
         skipCnt = (audioPts - expectedPts) / Audio::BufSz;
