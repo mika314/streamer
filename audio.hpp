@@ -16,7 +16,7 @@ public:
     BufSz = 1024,
     ChN = 2,
     SampleRate = 48'000,
-    MaxAvDesync = 100 // ms
+    MaxAvDesync = 50 // ms
   };
 
   Audio();

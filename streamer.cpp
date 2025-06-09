@@ -415,14 +415,13 @@ auto Streamer::streamingVideoWorker() -> void
       std::this_thread::sleep_for(target - t);
       tryingCatchUp = false;
     }
-    else if (t - target > 1s)
-    {
+    else if (t - target > std::chrono::microseconds(50'000))
       tryingCatchUp = true;
+
+    if (tryingCatchUp)
       LOG("trying to catch up",
           std::chrono::duration_cast<std::chrono::milliseconds>(t - target).count(),
           "ms");
-    }
-
     target += std::chrono::microseconds(1'000'000 / Fps);
     if (t >= nextTimeLog)
     {
