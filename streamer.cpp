@@ -2,11 +2,12 @@
 #include "rgb2yuv.hpp"
 #include <algorithm>
 #include <array>
+#include <iomanip>
 #include <log/log.hpp>
 
 static const int Fps = 60;
 
-Streamer::Streamer() : startTime(std::chrono::steady_clock::now())
+Streamer::Streamer() : startTime(std::chrono::steady_clock::now()), nextTimeLog(startTime)
 {
   avformat_network_init();
 }
@@ -345,6 +346,21 @@ auto Streamer::stopStreaming() -> void
   streamingRunning.store(false);
 }
 
+static auto formatDuration(const std::chrono::steady_clock::time_point &startTime,
+                           const std::chrono::steady_clock::time_point &currentTime) -> std::string
+{
+  using namespace std::chrono;
+  const auto total_secs = duration_cast<seconds>(currentTime - startTime).count();
+  const auto hours = total_secs / 3600;
+  const auto secs = total_secs % 3600;
+  const auto minutes = secs / 60;
+  const auto seconds = secs % 60;
+  std::ostringstream oss;
+  oss << std::setw(2) << std::setfill('0') << hours << ":" << std::setw(2) << std::setfill('0')
+      << minutes << ":" << std::setw(2) << std::setfill('0') << seconds;
+  return oss.str();
+}
+
 auto Streamer::streamingVideoWorker() -> void
 {
   if (!glXMakeCurrent(captureDisplay, captureRootWindow, captureGLContext))
@@ -403,10 +419,16 @@ auto Streamer::streamingVideoWorker() -> void
     {
       tryingCatchUp = true;
       LOG("trying to catch up",
-          std::chrono::duration_cast<std::chrono::milliseconds>(t - target).count());
+          std::chrono::duration_cast<std::chrono::milliseconds>(t - target).count(),
+          "ms");
     }
 
     target += std::chrono::microseconds(1'000'000 / Fps);
+    if (t >= nextTimeLog)
+    {
+      nextTimeLog += 10s;
+      LOG(formatDuration(startTime, t));
+    }
   }
   av_frame_free(&videoFrame);
 }
@@ -423,7 +445,7 @@ auto Streamer::streamingAudioWorker() -> void
       return;
     if (skipCnt > 0)
     {
-      LOG("skipping");
+      LOG("Skipping audio");
       --skipCnt;
       return;
     }
@@ -433,13 +455,14 @@ auto Streamer::streamingAudioWorker() -> void
                                .count();
     if (std::abs(audioPts - expectedPts) > Audio::SampleRate * Audio::MaxAvDesync / 1000)
     {
-      LOG("desync more than ",
+      LOG("desync more than",
           Audio::MaxAvDesync,
           "ms",
-          (audioPts - expectedPts) * 1000 / Audio::SampleRate);
+          (audioPts - expectedPts) * 1000 / Audio::SampleRate,
+          "ms");
       if (expectedPts > audioPts)
       {
-        LOG("Sending extra", expectedPts - audioPts);
+        LOG("Sending extra audio", (expectedPts - audioPts) * 1000 / Audio::SampleRate, "ms");
         auto zeroBuf = std::array<int16_t, Audio::BufSz * Audio::ChN>{};
         while (expectedPts > audioPts)
           sendAudioFrame(reinterpret_cast<const uint8_t *>(zeroBuf.data()), Audio::BufSz);

@@ -64,6 +64,7 @@ private:
   std::mutex mutex;
   bool hideDesktop = false;
   decltype(std::chrono::steady_clock::now()) startTime;
+  decltype(std::chrono::steady_clock::now()) nextTimeLog;
   std::atomic<bool> videoReady{false};
 
   auto captureAudio(int16_t *samples, int nbSamples) -> bool;
